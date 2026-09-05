@@ -559,13 +559,8 @@ export default function Home() {
             <CardDescription>{scenarioResult.goalShortfall > 0 ? `${compact(scenarioResult.goalShortfall)} units below today's goal under this plan.` : 'Today’s goal is covered with tomorrow’s reserve protected.'}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="reserve-hero">
-              <span>Work carried into tomorrow</span>
-              <strong>{scenarioResult.backlogDays.toFixed(2)} <small>days</small></strong>
-              <div className="reserve-track" role="meter" aria-label="Backlog reserve coverage" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, scenarioResult.backlogDays * 100)}><span style={{ width: `${Math.min(100, scenarioResult.backlogDays * 100)}%` }} /></div>
-              <p>{scenarioResult.reserveShortfall > 0 ? `${compact(scenarioResult.reserveShortfall)} more units needed to restore the one-day reserve.` : `One-day reserve protected · ${compact(scenarioResult.reserveUnits)} units minimum`}</p>
-            </div>
             <div className="scenario-result-grid">
+              <div><span>Tomorrow’s reserve</span><strong>{scenarioResult.backlogDays.toFixed(2)} days</strong></div>
               <div><span>Incoming volume</span><strong>{compact(scenarioResult.forecastedUnits)}</strong></div>
               <div><span>Total work available</span><strong>{compact(scenarioResult.availableUnits)}</strong></div>
               <div><span>Shift capacity</span><strong>{compact(scenarioResult.capacityUnits)}</strong></div>

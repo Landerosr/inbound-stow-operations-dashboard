@@ -133,17 +133,11 @@ type DashboardData = {
 
 type DashboardToolInput = { season?: string; month?: string };
 type ScenarioInput = {
-  forecastedTrailers: number;
-  unitsPerTrailer: number;
+  volumeGoal: number;
   startingBacklogUnits: number;
   headcount: number;
   shiftHours: number;
-  productiveUtilization: number;
   stowRate: number;
-  unitsPerFace: number;
-  qualityDefectsPer1000: number;
-  countErrorsPer1000: number;
-  hourlyLaborCost: number;
 };
 
 type ScenarioResult = {
@@ -158,7 +152,6 @@ type ScenarioResult = {
   requiredHeadcount: number;
   staffingGap: number;
   costPerUnit: number;
-  combinedErrors: number;
   recommendedAction: string;
 };
 type ModelContext = {
@@ -188,24 +181,21 @@ const colors = {
 };
 
 const scenarioDefaults: ScenarioInput = {
-  forecastedTrailers: 15,
-  unitsPerTrailer: 12_200,
+  volumeGoal: 183_000,
   startingBacklogUnits: 20_000,
   headcount: 80,
   shiftHours: 10,
-  productiveUtilization: 85,
   stowRate: 260,
-  unitsPerFace: 13,
-  qualityDefectsPer1000: 2.5,
-  countErrorsPer1000: 1.5,
-  hourlyLaborCost: 22,
 };
 
+const PRODUCTIVE_UTILIZATION = 0.85;
+const HOURLY_LABOR_COST = 22;
+
 function calculateScenario(input: ScenarioInput): ScenarioResult {
-  const forecastedUnits = input.forecastedTrailers * input.unitsPerTrailer;
+  const forecastedUnits = input.volumeGoal;
   const availableUnits = forecastedUnits + input.startingBacklogUnits;
   const laborHours = input.headcount * input.shiftHours;
-  const productiveHours = laborHours * (input.productiveUtilization / 100);
+  const productiveHours = laborHours * PRODUCTIVE_UTILIZATION;
   const capacityUnits = productiveHours * input.stowRate;
   const processedUnits = Math.min(availableUnits, capacityUnits);
   const endingBacklogUnits = Math.max(0, availableUnits - processedUnits);
@@ -213,18 +203,15 @@ function calculateScenario(input: ScenarioInput): ScenarioResult {
   const tph = processedUnits / Math.max(input.shiftHours, 1);
   const requiredHeadcount = Math.ceil(
     availableUnits /
-      Math.max(input.shiftHours * (input.productiveUtilization / 100) * input.stowRate, 1),
+      Math.max(input.shiftHours * PRODUCTIVE_UTILIZATION * input.stowRate, 1),
   );
   const staffingGap = requiredHeadcount - input.headcount;
-  const costPerUnit = (laborHours * input.hourlyLaborCost) / Math.max(processedUnits, 1);
-  const combinedErrors = input.qualityDefectsPer1000 + input.countErrorsPer1000;
+  const costPerUnit = (laborHours * HOURLY_LABOR_COST) / Math.max(processedUnits, 1);
 
   let recommendedAction = 'Maintain plan';
   if (staffingGap >= 12 || backlogHours >= 2.5) recommendedAction = 'Add OT';
   else if (staffingGap >= 5) recommendedAction = 'Labor share';
   else if (staffingGap <= -10 && backlogHours < 0.7) recommendedAction = 'Offer VTO';
-  else if (combinedErrors > 5) recommendedAction = 'Quality audit';
-  else if (input.unitsPerFace < 12.4 && input.stowRate < 260) recommendedAction = 'UPF coaching';
   else if (staffingGap >= 2) recommendedAction = 'Use flex-trained team';
 
   return {
@@ -239,7 +226,6 @@ function calculateScenario(input: ScenarioInput): ScenarioResult {
     requiredHeadcount,
     staffingGap,
     costPerUnit,
-    combinedErrors,
     recommendedAction,
   };
 }
@@ -383,21 +369,15 @@ export default function Home() {
         {
           name: 'calculate_inbound_plan',
           title: 'Calculate inbound plan',
-          description: 'Enter an inbound-stow operating scenario, update the visible planning inputs, and calculate staffing, capacity, backlog, TPH, cost, and the recommended action.',
+          description: 'Use five operating inputs to calculate staffing, capacity, backlog, throughput, cost, and the recommended labor response.',
           inputSchema: {
             type: 'object',
             properties: {
-              forecastedTrailers: { type: 'number', minimum: 0 },
-              unitsPerTrailer: { type: 'number', minimum: 0 },
+              volumeGoal: { type: 'number', minimum: 0 },
               startingBacklogUnits: { type: 'number', minimum: 0 },
               headcount: { type: 'number', minimum: 0 },
               shiftHours: { type: 'number', minimum: 0 },
-              productiveUtilization: { type: 'number', minimum: 0, maximum: 100 },
               stowRate: { type: 'number', minimum: 0 },
-              unitsPerFace: { type: 'number', minimum: 0 },
-              qualityDefectsPer1000: { type: 'number', minimum: 0 },
-              countErrorsPer1000: { type: 'number', minimum: 0 },
-              hourlyLaborCost: { type: 'number', minimum: 0 },
             },
             required: Object.keys(scenarioDefaults),
             additionalProperties: false,
@@ -406,8 +386,8 @@ export default function Home() {
           execute(input) {
             const requested = input as ScenarioInput;
             const values = Object.values(requested);
-            if (values.length !== Object.keys(scenarioDefaults).length || values.some((value) => !Number.isFinite(value) || value < 0) || requested.productiveUtilization > 100) {
-              throw new Error('All planning inputs must be valid non-negative numbers, and utilization cannot exceed 100%.');
+            if (values.length !== Object.keys(scenarioDefaults).length || values.some((value) => !Number.isFinite(value) || value < 0)) {
+              throw new Error('All five planning inputs must be valid non-negative numbers.');
             }
             setScenario(requested);
             return calculateScenario(requested);
@@ -497,8 +477,8 @@ export default function Home() {
       <section className="control-row" aria-label="Dashboard controls">
         <div>
           <p className="section-kicker">Decision support</p>
-          <h2>Forecast work, balance labor, protect quality</h2>
-          <p>A 10-hour inbound-stow model connecting trailers, units, backlog, staffing, throughput, and quality.</p>
+          <h2>Can today&apos;s team finish the work?</h2>
+          <p>Enter five numbers to compare available work with shift capacity and required staffing.</p>
         </div>
         <div className="filters">
           <label htmlFor="season-filter">Season
@@ -521,8 +501,8 @@ export default function Home() {
           <CardHeader className="scenario-card-header">
             <div>
               <p className="section-kicker">Live planning tool</p>
-              <CardTitle id="scenario-heading">Enter today&apos;s operating data</CardTitle>
-              <CardDescription>Change any field. The capacity plan updates immediately.</CardDescription>
+              <CardTitle id="scenario-heading">Build today&apos;s plan</CardTitle>
+              <CardDescription>The result updates as you change any input.</CardDescription>
             </div>
             <button className="reset-button" type="button" onClick={() => setScenario(scenarioDefaults)}>
               <RotateCcw aria-hidden="true" /> Reset sample
@@ -531,25 +511,15 @@ export default function Home() {
           <CardContent>
             <div className="scenario-fieldset">
               <div className="scenario-group">
-                <h3>Volume and labor</h3>
+                <h3>Today&apos;s inputs</h3>
                 <div className="scenario-input-grid">
-                  <NumberField label="Forecasted trailers" field="forecastedTrailers" value={scenario.forecastedTrailers} setScenario={setScenario} />
-                  <NumberField label="Units per trailer" field="unitsPerTrailer" value={scenario.unitsPerTrailer} setScenario={setScenario} />
-                  <NumberField label="Starting backlog" field="startingBacklogUnits" value={scenario.startingBacklogUnits} setScenario={setScenario} suffix="units" />
+                  <NumberField label="Volume goal" field="volumeGoal" value={scenario.volumeGoal} setScenario={setScenario} suffix="units" />
                   <NumberField label="Headcount" field="headcount" value={scenario.headcount} setScenario={setScenario} />
+                  <NumberField label="Estimated stow rate" field="stowRate" value={scenario.stowRate} setScenario={setScenario} suffix="UPH" />
                   <NumberField label="Shift length" field="shiftHours" value={scenario.shiftHours} setScenario={setScenario} suffix="hours" step={0.5} />
-                  <NumberField label="Productive time" field="productiveUtilization" value={scenario.productiveUtilization} setScenario={setScenario} suffix="%" step={0.5} />
+                  <NumberField label="Starting backlog" field="startingBacklogUnits" value={scenario.startingBacklogUnits} setScenario={setScenario} suffix="units" />
                 </div>
-              </div>
-              <div className="scenario-group">
-                <h3>Performance and quality</h3>
-                <div className="scenario-input-grid">
-                  <NumberField label="Stow rate" field="stowRate" value={scenario.stowRate} setScenario={setScenario} suffix="UPH" />
-                  <NumberField label="Units per face" field="unitsPerFace" value={scenario.unitsPerFace} setScenario={setScenario} suffix="UPF" step={0.1} />
-                  <NumberField label="Quality defects" field="qualityDefectsPer1000" value={scenario.qualityDefectsPer1000} setScenario={setScenario} suffix="per 1K" step={0.1} />
-                  <NumberField label="Count errors" field="countErrorsPer1000" value={scenario.countErrorsPer1000} setScenario={setScenario} suffix="per 1K" step={0.1} />
-                  <NumberField label="Hourly labor cost" field="hourlyLaborCost" value={scenario.hourlyLaborCost} setScenario={setScenario} suffix="$/hr" step={0.5} />
-                </div>
+                <p className="scenario-assumption-note">Uses 85% productive time and an illustrative $22 hourly labor cost.</p>
               </div>
             </div>
           </CardContent>
@@ -564,11 +534,11 @@ export default function Home() {
               </div>
               <span><Calculator aria-hidden="true" /></span>
             </div>
-            <CardDescription>Calculated from the values entered on the left.</CardDescription>
+            <CardDescription>Based on the five inputs and the assumptions shown below.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="scenario-result-grid">
-              <div><span>Forecasted units</span><strong>{compact(scenarioResult.forecastedUnits)}</strong></div>
+              <div><span>Volume goal</span><strong>{compact(scenarioResult.forecastedUnits)}</strong></div>
               <div><span>Total work available</span><strong>{compact(scenarioResult.availableUnits)}</strong></div>
               <div><span>Shift capacity</span><strong>{compact(scenarioResult.capacityUnits)}</strong></div>
               <div><span>Expected processed</span><strong>{compact(scenarioResult.processedUnits)}</strong></div>
@@ -579,7 +549,6 @@ export default function Home() {
               <div><span>Throughput</span><strong>{compact(scenarioResult.tph)} TPH</strong></div>
               <div><span>Labor hours</span><strong>{scenarioResult.laborHours.toFixed(0)}</strong></div>
               <div><span>Cost per unit</span><strong>${scenarioResult.costPerUnit.toFixed(3)}</strong></div>
-              <div><span>Combined errors</span><strong>{scenarioResult.combinedErrors.toFixed(1)} / 1K</strong></div>
             </div>
           </CardContent>
         </Card>
@@ -692,8 +661,8 @@ export default function Home() {
         <Card className="method-card">
           <CardHeader><CardTitle>How the model works</CardTitle><CardDescription>Connecting operating data with daily labor decisions</CardDescription></CardHeader>
           <CardContent><ol className="method-list">
-            <li><Truck /><div><strong>Forecast work</strong><span>Trailers × units per trailer + starting backlog</span></div></li>
-            <li><Users /><div><strong>Estimate capacity</strong><span>Headcount × 10 hours × productive time × stow rate</span></div></li>
+            <li><Truck /><div><strong>Forecast work</strong><span>Daily volume goal + starting backlog</span></div></li>
+            <li><Users /><div><strong>Estimate capacity</strong><span>Headcount × shift length × 85% productive time × stow rate</span></div></li>
             <li><PackageCheck /><div><strong>Protect execution</strong><span>Track UPF, defects, count errors, TPH, and cost</span></div></li>
             <li><ShieldCheck /><div><strong>Recommend action</strong><span>OT, VTO, labor share, cross-training, coaching, or audit</span></div></li>
           </ol></CardContent>
@@ -702,7 +671,7 @@ export default function Home() {
         <Card className="assumption-card">
           <CardHeader><CardTitle>Model assumptions</CardTitle><CardDescription>Transparent inputs used for this case study</CardDescription></CardHeader>
           <CardContent><dl className="assumption-list">
-            <div><dt>Shift length</dt><dd>10 hours</dd></div>
+            <div><dt>Sample shift length</dt><dd>10 hours</dd></div>
             <div><dt>Productive time</dt><dd>85%</dd></div>
             <div><dt>Peak headcount</dt><dd>~170 associates</dd></div>
             <div><dt>Non-peak headcount</dt><dd>~80 associates</dd></div>

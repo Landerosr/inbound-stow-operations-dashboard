@@ -2,7 +2,7 @@
 
 **Live dashboard:** https://landerosr.github.io/inbound-stow-operations-dashboard/
 
-An operations analytics portfolio project based on my experience leading inbound stow. The dashboard connects forecasted trailers and units with headcount, labor hours, stow rate, throughput, backlog, quality, and cost.
+An operations analytics portfolio project based on my experience leading inbound stow. The dashboard connects a daily volume goal with headcount, labor hours, stow rate, throughput, backlog, quality, and cost.
 
 The project uses synthetic data only. It does not contain confidential Amazon information or internal company benchmarks.
 
@@ -12,7 +12,7 @@ How should an inbound team adjust labor when forecasted volume, backlog, stow pe
 
 ## What the dashboard tracks
 
-- Forecasted trailers and units per trailer
+- Daily volume goal
 - Starting and ending backlog in units and hours of work
 - Actual versus required headcount
 - Labor hours, stow rate (UPH), and throughput per hour (TPH)
@@ -21,11 +21,11 @@ How should an inbound team adjust labor when forecasted volume, backlog, stow pe
 
 ## Decisions modeled
 
-The model recommends adding overtime, offering voluntary time off, labor sharing, using flex-trained associates, coaching UPF, completing a quality audit, or maintaining the plan.
+The simplified planner recommends adding overtime, offering voluntary time off, labor sharing, using flex-trained associates, or maintaining the plan. The historical case-study data also tracks UPF coaching and quality-audit decisions.
 
 ## Live planning tool
 
-The website includes an editable daily scenario planner. Users can enter trailer volume, units per trailer, backlog, headcount, shift length, productive time, stow rate, UPF, quality results, and labor cost. The dashboard immediately calculates capacity, processed units, ending backlog, backlog hours, required headcount, staffing gap, TPH, cost per unit, and a recommended response.
+The website includes a five-input daily planner. Users enter the volume goal, headcount, estimated stow rate, shift length, and starting backlog. The dashboard immediately calculates capacity, processed units, ending backlog, backlog hours, required headcount, staffing gap, TPH, cost per unit, and a recommended labor response. Productive time and labor cost remain visible model assumptions instead of extra form fields.
 
 ## Tools
 

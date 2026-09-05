@@ -489,8 +489,8 @@ export default function Home() {
             </NativeSelect>
           </label>
           <label htmlFor="month-filter">Month
-            <NativeSelect id="month-filter" aria-label="Filter by month" value={month} onChange={(event) => { setMonth(event.target.value); if (event.target.value !== 'all') setSeason('all'); }}>
-              {months.map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}
+            <NativeSelect id="month-filter" aria-label="Filter by month" value={month} onChange={(event) => setMonth(event.target.value)}>
+              {months.filter(([value]) => value === 'all' || season === 'all' || data.monthly.some((row) => row.season === season && row.month_number === Number(value))).map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}
             </NativeSelect>
           </label>
         </div>

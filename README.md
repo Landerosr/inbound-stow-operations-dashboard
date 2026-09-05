@@ -25,7 +25,11 @@ The simplified planner recommends adding overtime, offering voluntary time off, 
 
 ## Live planning tool
 
-The website includes a five-input daily planner. Users enter the volume goal, headcount, estimated stow rate, shift length, and starting backlog. The dashboard immediately calculates capacity, processed units, ending backlog, backlog hours, required headcount, staffing gap, TPH, cost per unit, and a recommended labor response. Productive time and labor cost remain visible model assumptions instead of extra form fields.
+The daily planner uses headcount, volume goal, estimated stow rate, shift length, starting backlog, and incoming trailers. Units per trailer can be edited under the expandable assumptions section.
+
+One day of reserve equals the daily volume goal. Available work is starting backlog plus incoming trailers multiplied by estimated units per trailer. Planned processing is the lowest of the daily goal, staffing capacity, and work available above the reserve. If there is not enough incoming work, the planner identifies the shortfall instead of recommending extra labor to process the reserve. Required headcount refers to this achievable processing plan.
+
+The planner assumes incoming volume becomes available during the shift; it does not model trailer arrival times. Cost uses $22 per scheduled labor hour and excludes overtime premiums. Historical synthetic charts remain a separate case study and do not change with planner inputs.
 
 ## Tools
 

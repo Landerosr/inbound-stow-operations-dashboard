@@ -133,6 +133,8 @@ type DashboardData = {
 
 type DashboardToolInput = { season?: string; month?: string };
 type ScenarioInput = {
+  incomingTrailers: number;
+  unitsPerTrailer: number;
   volumeGoal: number;
   startingBacklogUnits: number;
   headcount: number;
@@ -141,6 +143,10 @@ type ScenarioInput = {
 };
 
 type ScenarioResult = {
+  reserveUnits: number;
+  reserveShortfall: number;
+  goalShortfall: number;
+  backlogDays: number;
   forecastedUnits: number;
   availableUnits: number;
   laborHours: number;
@@ -181,8 +187,10 @@ const colors = {
 };
 
 const scenarioDefaults: ScenarioInput = {
+  incomingTrailers: 15,
+  unitsPerTrailer: 12_200,
   volumeGoal: 183_000,
-  startingBacklogUnits: 20_000,
+  startingBacklogUnits: 183_000,
   headcount: 80,
   shiftHours: 10,
   stowRate: 260,
@@ -192,29 +200,37 @@ const PRODUCTIVE_UTILIZATION = 0.85;
 const HOURLY_LABOR_COST = 22;
 
 function calculateScenario(input: ScenarioInput): ScenarioResult {
-  const forecastedUnits = input.volumeGoal;
+  const forecastedUnits = input.incomingTrailers * input.unitsPerTrailer;
   const availableUnits = forecastedUnits + input.startingBacklogUnits;
+  const reserveUnits = input.volumeGoal;
+  const releasableUnits = Math.max(0, availableUnits - reserveUnits);
   const laborHours = input.headcount * input.shiftHours;
   const productiveHours = laborHours * PRODUCTIVE_UTILIZATION;
   const capacityUnits = productiveHours * input.stowRate;
-  const processedUnits = Math.min(availableUnits, capacityUnits);
+  const processedUnits = Math.min(input.volumeGoal, releasableUnits, capacityUnits);
   const endingBacklogUnits = Math.max(0, availableUnits - processedUnits);
   const backlogHours = endingBacklogUnits / Math.max(input.headcount * input.stowRate, 1);
   const tph = processedUnits / Math.max(input.shiftHours, 1);
   const requiredHeadcount = Math.ceil(
-    availableUnits /
+    Math.min(input.volumeGoal, releasableUnits) /
       Math.max(input.shiftHours * PRODUCTIVE_UTILIZATION * input.stowRate, 1),
   );
   const staffingGap = requiredHeadcount - input.headcount;
   const costPerUnit = (laborHours * HOURLY_LABOR_COST) / Math.max(processedUnits, 1);
 
   let recommendedAction = 'Maintain plan';
-  if (staffingGap >= 12 || backlogHours >= 2.5) recommendedAction = 'Add OT';
+  if (availableUnits < reserveUnits) recommendedAction = 'Rebuild the reserve';
+  else if (releasableUnits < input.volumeGoal) recommendedAction = 'More inbound volume needed';
+  else if (staffingGap >= 12) recommendedAction = 'Add OT';
   else if (staffingGap >= 5) recommendedAction = 'Labor share';
-  else if (staffingGap <= -10 && backlogHours < 0.7) recommendedAction = 'Offer VTO';
-  else if (staffingGap >= 2) recommendedAction = 'Use flex-trained team';
+  else if (staffingGap <= -10) recommendedAction = 'Consider VTO or labor share';
+  else if (staffingGap > 0) recommendedAction = 'Use flex-trained team';
 
   return {
+    reserveUnits,
+    reserveShortfall: Math.max(0, reserveUnits - endingBacklogUnits),
+    goalShortfall: Math.max(0, input.volumeGoal - processedUnits),
+    backlogDays: reserveUnits > 0 ? endingBacklogUnits / reserveUnits : 0,
     forecastedUnits,
     availableUnits,
     laborHours,
@@ -369,10 +385,12 @@ export default function Home() {
         {
           name: 'calculate_inbound_plan',
           title: 'Calculate inbound plan',
-          description: 'Use five operating inputs to calculate staffing, capacity, backlog, throughput, cost, and the recommended labor response.',
+          description: 'Calculate a trailer-based inbound plan while retaining one daily volume goal as backlog reserve.',
           inputSchema: {
             type: 'object',
             properties: {
+              incomingTrailers: { type: 'number', minimum: 0 },
+              unitsPerTrailer: { type: 'number', minimum: 0 },
               volumeGoal: { type: 'number', minimum: 0 },
               startingBacklogUnits: { type: 'number', minimum: 0 },
               headcount: { type: 'number', minimum: 0 },
@@ -387,7 +405,7 @@ export default function Home() {
             const requested = input as ScenarioInput;
             const values = Object.values(requested);
             if (values.length !== Object.keys(scenarioDefaults).length || values.some((value) => !Number.isFinite(value) || value < 0)) {
-              throw new Error('All five planning inputs must be valid non-negative numbers.');
+              throw new Error('All planning inputs must be valid non-negative numbers.');
             }
             setScenario(requested);
             return calculateScenario(requested);
@@ -477,8 +495,8 @@ export default function Home() {
       <section className="control-row" aria-label="Dashboard controls">
         <div>
           <p className="section-kicker">Decision support</p>
-          <h2>Can today&apos;s team finish the work?</h2>
-          <p>Enter five numbers to compare available work with shift capacity and required staffing.</p>
+          <h2>Plan today. Protect tomorrow.</h2>
+          <p>Balance incoming trailers, staffing, and a full day of work in reserve.</p>
         </div>
         <div className="filters">
           <label htmlFor="season-filter">Season
@@ -502,7 +520,7 @@ export default function Home() {
             <div>
               <p className="section-kicker">Live planning tool</p>
               <CardTitle id="scenario-heading">Build today&apos;s plan</CardTitle>
-              <CardDescription>The result updates as you change any input.</CardDescription>
+              <CardDescription>Adjust your shift. See the plan respond.</CardDescription>
             </div>
             <button className="reset-button" type="button" onClick={() => setScenario(scenarioDefaults)}>
               <RotateCcw aria-hidden="true" /> Reset sample
@@ -518,8 +536,12 @@ export default function Home() {
                   <NumberField label="Estimated stow rate" field="stowRate" value={scenario.stowRate} setScenario={setScenario} suffix="UPH" />
                   <NumberField label="Shift length" field="shiftHours" value={scenario.shiftHours} setScenario={setScenario} suffix="hours" step={0.5} />
                   <NumberField label="Starting backlog" field="startingBacklogUnits" value={scenario.startingBacklogUnits} setScenario={setScenario} suffix="units" />
+                  <NumberField label="Incoming trailers today" field="incomingTrailers" value={scenario.incomingTrailers} setScenario={setScenario} />
                 </div>
-                <p className="scenario-assumption-note">Uses 85% productive time and an illustrative $22 hourly labor cost.</p>
+                <details className="planning-details"><summary>Trailer estimate & assumptions</summary>
+                  <NumberField label="Estimated units per trailer" field="unitsPerTrailer" value={scenario.unitsPerTrailer} setScenario={setScenario} suffix="units" />
+                  <p className="scenario-assumption-note">Reserve = one daily volume goal. Assumes trailers are available during the shift, 85% productive time, and $22/hour labor cost. Arrival timing and overtime premiums are not modeled.</p>
+                </details>
               </div>
             </div>
           </CardContent>
@@ -534,26 +556,33 @@ export default function Home() {
               </div>
               <span><Calculator aria-hidden="true" /></span>
             </div>
-            <CardDescription>Based on the five inputs and the assumptions shown below.</CardDescription>
+            <CardDescription>{scenarioResult.goalShortfall > 0 ? `${compact(scenarioResult.goalShortfall)} units below today's goal under this plan.` : 'Today’s goal is covered with tomorrow’s reserve protected.'}</CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="reserve-hero">
+              <span>Work carried into tomorrow</span>
+              <strong>{scenarioResult.backlogDays.toFixed(2)} <small>days</small></strong>
+              <div className="reserve-track" role="meter" aria-label="Backlog reserve coverage" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.min(100, scenarioResult.backlogDays * 100)}><span style={{ width: `${Math.min(100, scenarioResult.backlogDays * 100)}%` }} /></div>
+              <p>{scenarioResult.reserveShortfall > 0 ? `${compact(scenarioResult.reserveShortfall)} more units needed to restore the one-day reserve.` : `One-day reserve protected · ${compact(scenarioResult.reserveUnits)} units minimum`}</p>
+            </div>
             <div className="scenario-result-grid">
-              <div><span>Volume goal</span><strong>{compact(scenarioResult.forecastedUnits)}</strong></div>
+              <div><span>Incoming volume</span><strong>{compact(scenarioResult.forecastedUnits)}</strong></div>
               <div><span>Total work available</span><strong>{compact(scenarioResult.availableUnits)}</strong></div>
               <div><span>Shift capacity</span><strong>{compact(scenarioResult.capacityUnits)}</strong></div>
-              <div><span>Expected processed</span><strong>{compact(scenarioResult.processedUnits)}</strong></div>
+              <div><span>Planned processing</span><strong>{compact(scenarioResult.processedUnits)}</strong></div>
               <div><span>Ending backlog</span><strong>{compact(scenarioResult.endingBacklogUnits)}</strong></div>
               <div><span>Backlog hours</span><strong>{scenarioResult.backlogHours.toFixed(1)}</strong></div>
-              <div><span>Required headcount</span><strong>{scenarioResult.requiredHeadcount}</strong></div>
+              <div><span>HC for available plan</span><strong>{scenarioResult.requiredHeadcount}</strong></div>
               <div><span>Staffing gap</span><strong>{scenarioResult.staffingGap > 0 ? '+' : ''}{scenarioResult.staffingGap}</strong></div>
               <div><span>Throughput</span><strong>{compact(scenarioResult.tph)} TPH</strong></div>
               <div><span>Labor hours</span><strong>{scenarioResult.laborHours.toFixed(0)}</strong></div>
-              <div><span>Cost per unit</span><strong>${scenarioResult.costPerUnit.toFixed(3)}</strong></div>
+              <div><span>Cost per unit</span><strong>{scenarioResult.processedUnits > 0 ? `$${scenarioResult.costPerUnit.toFixed(3)}` : '—'}</strong></div>
             </div>
           </CardContent>
         </Card>
       </section>
 
+      <div className="control-row"><div><p className="section-kicker">Historical case study</p><h2>Performance over time</h2><p>Synthetic shift data, filtered by season and month. Separate from your live plan above.</p></div></div>
       <section className="metric-grid" aria-label="Key performance indicators">
         <MetricCard icon={Gauge} label="Stow rate" value={`${avgRate.toFixed(1)} UPH`} detail={`${avgRate >= target.stow_rate_uph ? 'At/above' : 'Below'} ${target.stow_rate_uph} target`} status={avgRate >= target.stow_rate_uph ? 'good' : 'watch'} />
         <MetricCard icon={Boxes} label="Units per face" value={avgUpf.toFixed(1)} detail={`${avgUpf >= target.units_per_face ? 'At/above' : 'Below'} ${target.units_per_face} target`} status={avgUpf >= target.units_per_face ? 'good' : 'watch'} />
@@ -661,9 +690,9 @@ export default function Home() {
         <Card className="method-card">
           <CardHeader><CardTitle>How the model works</CardTitle><CardDescription>Connecting operating data with daily labor decisions</CardDescription></CardHeader>
           <CardContent><ol className="method-list">
-            <li><Truck /><div><strong>Forecast work</strong><span>Daily volume goal + starting backlog</span></div></li>
+            <li><Truck /><div><strong>Forecast work</strong><span>Incoming trailers × units per trailer + starting backlog</span></div></li>
             <li><Users /><div><strong>Estimate capacity</strong><span>Headcount × shift length × 85% productive time × stow rate</span></div></li>
-            <li><PackageCheck /><div><strong>Protect execution</strong><span>Track UPF, defects, count errors, TPH, and cost</span></div></li>
+            <li><PackageCheck /><div><strong>Protect tomorrow</strong><span>Retain one daily volume goal before allocating today’s work</span></div></li>
             <li><ShieldCheck /><div><strong>Recommend action</strong><span>OT, VTO, labor share, cross-training, coaching, or audit</span></div></li>
           </ol></CardContent>
         </Card>

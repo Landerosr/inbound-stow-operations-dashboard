@@ -529,6 +529,15 @@ export default function Home() {
           <CardContent>
             <div className="scenario-fieldset">
               <div className="scenario-group">
+                <div className="quick-plan" aria-label="Quick staffing and arrival adjustments">
+                  <span>Try a change</span>
+                  <div>
+                    <button type="button" onClick={() => setScenario(s => ({ ...s, headcount: s.headcount + 5 }))}>+5 people</button>
+                    <button type="button" disabled={scenario.headcount < 5} onClick={() => setScenario(s => ({ ...s, headcount: Math.max(0, s.headcount - 5) }))}>−5 people</button>
+                    <button type="button" onClick={() => setScenario(s => ({ ...s, incomingTrailers: s.incomingTrailers + 1 }))}>+1 trailer</button>
+                    <button type="button" disabled={scenario.incomingTrailers < 1} onClick={() => setScenario(s => ({ ...s, incomingTrailers: Math.max(0, s.incomingTrailers - 1) }))}>−1 trailer</button>
+                  </div>
+                </div>
                 <h3>Today&apos;s inputs</h3>
                 <div className="scenario-input-grid">
                   <NumberField label="Volume goal" field="volumeGoal" value={scenario.volumeGoal} setScenario={setScenario} suffix="units" />

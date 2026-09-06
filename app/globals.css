@@ -404,6 +404,16 @@ body { font-size: 16px; }
 .scenario-result-grid strong { font-size: 1rem; }
 .status-badge { color: var(--muted-foreground); background: #f3f3f5; border-color: var(--border); }
 .status-dot { background: #777780; }
-.metric-icon-watch { color: #8a601f; }
+.metric-icon-watch { color: #62626b; }
+.decision-stat strong { color: #34343a; }
+.quick-plan { margin-bottom: 20px; }
+.quick-plan > span { display: block; margin-bottom: 8px; color: #62626b; font-size: .875rem; }
+.quick-plan > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.quick-plan button { min-height: 40px; padding: 8px 12px; border: 1px solid #dedee3; border-radius: 7px; background: #f6f6f7; color: #34343a; font-size: .875rem; cursor: pointer; transition: background 120ms ease; }
+.quick-plan button:hover:not(:disabled) { background: #e9e9ec; }
+.quick-plan button:active:not(:disabled) { background: #dcdce1; }
+.quick-plan button:focus-visible { outline: 2px solid #34343a; outline-offset: 2px; }
+.quick-plan button:disabled { opacity: .45; cursor: not-allowed; }
+@media (prefers-reduced-motion: reduce) { .quick-plan button { transition: none; } }
 .recharts-tooltip-wrapper { color: var(--foreground); }
 @media (max-width: 780px) { .dashboard-shell { padding: 0 18px 28px; } }

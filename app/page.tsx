@@ -182,8 +182,8 @@ const months = [
 ];
 
 const colors = {
-  cyan: '#34343a', amber: '#83838e', green: '#656570',
-  red: '#b8b8c0', muted: '#c9c9cf', grid: '#e7e7eb',
+  cyan: '#79b5ff', amber: '#f4c06a', green: '#5cdec1',
+  red: '#ff8393', muted: '#9c9bf0', grid: '#2b3340',
 };
 
 const scenarioDefaults: ScenarioInput = {
@@ -603,7 +603,7 @@ export default function Home() {
               <CartesianGrid stroke={colors.grid} vertical={false} />
               <XAxis dataKey="label" tickLine={false} axisLine={false} />
               <YAxis tickFormatter={compact} tickLine={false} axisLine={false} width={48} />
-              <Tooltip contentStyle={{ background: '#ffffff', border: '1px solid #e2e2e5', color: '#222226' }} />
+              <Tooltip contentStyle={{ background: '#101318', border: '1px solid #334158', color: '#f0f3f8' }} />
               <Legend />
               <Bar dataKey="forecast" name="Forecast units" fill={colors.muted} radius={[3, 3, 0, 0]} />
               <Bar dataKey="processed" name="Processed units" fill={colors.cyan} radius={[3, 3, 0, 0]} />
@@ -639,7 +639,7 @@ export default function Home() {
               <CartesianGrid stroke={colors.grid} vertical={false} />
               <XAxis dataKey="label" tickLine={false} axisLine={false} />
               <YAxis tickLine={false} axisLine={false} width={36} />
-              <Tooltip contentStyle={{ background: '#ffffff', border: '1px solid #e2e2e5', color: '#222226' }} />
+              <Tooltip contentStyle={{ background: '#101318', border: '1px solid #334158', color: '#f0f3f8' }} />
               <Legend />
               <Line type="monotone" dataKey="actualHeadcount" name="Actual HC" stroke={colors.cyan} strokeWidth={2.5} dot={false} />
               <Line type="monotone" dataKey="requiredHeadcount" name="Required HC" stroke={colors.amber} strokeWidth={2.5} strokeDasharray="5 5" dot={false} />
@@ -653,7 +653,7 @@ export default function Home() {
               <CartesianGrid stroke={colors.grid} />
               <XAxis dataKey="upf" name="UPF" type="number" domain={[9, 17]} tickLine={false} />
               <YAxis dataKey="stow_rate_uph" name="Stow rate" type="number" domain={[230, 285]} tickLine={false} width={38} />
-              <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ background: '#ffffff', border: '1px solid #e2e2e5', color: '#222226' }} />
+              <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ background: '#101318', border: '1px solid #334158', color: '#f0f3f8' }} />
               <ReferenceLine x={target.units_per_face} stroke={colors.amber} strokeDasharray="4 4" />
               <ReferenceLine y={target.stow_rate_uph} stroke={colors.green} strokeDasharray="4 4" />
               <Scatter data={data.upf_relationship} fill={colors.cyan} />
@@ -668,7 +668,7 @@ export default function Home() {
               <XAxis dataKey="month" tickLine={false} axisLine={false} />
               <YAxis yAxisId="errors" tickLine={false} axisLine={false} width={28} />
               <YAxis yAxisId="rate" orientation="right" domain={[240, 275]} tickLine={false} axisLine={false} width={32} />
-              <Tooltip contentStyle={{ background: '#ffffff', border: '1px solid #e2e2e5', color: '#222226' }} />
+              <Tooltip contentStyle={{ background: '#101318', border: '1px solid #334158', color: '#f0f3f8' }} />
               <Legend />
               <Bar yAxisId="errors" dataKey="quality" name="Quality defects" stackId="errors" fill={colors.amber} />
               <Bar yAxisId="errors" dataKey="count" name="Count errors" stackId="errors" fill={colors.red} radius={[3, 3, 0, 0]} />

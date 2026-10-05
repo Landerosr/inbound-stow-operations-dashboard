@@ -425,3 +425,6 @@ body { font-size: 16px; }
 .scenario-result-heading > span, .section-kicker { color: #79b5ff; }
 .quick-plan button { color: #c9dfff; border-color: #334158; }
 .scenario-field input:focus { box-shadow: 0 0 0 3px #79b5ff25; }
+
+.production-forecast { margin: 24px 0; }
+.production-forecast > p { margin: 12px 4px 0; }

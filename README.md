@@ -61,3 +61,9 @@ pnpm dev
 - 85% productive utilization
 - Illustrative labor rates of $22 regular and $33 overtime
 - Illustrative quality threshold of no more than five combined defects and count errors per 1,000 units
+
+### Next 24 hours production projection
+
+The live planner includes a cumulative production line and volume-goal comparison from hour 0 through hour 24. It recalculates with the planning inputs. One shift begins at hour 0; all planned inbound is assumed available at the start, staffing and rate are constant, and productive utilization is 85%. Production stops at shift end, the volume goal, or available volume after retaining the one-day reserve. No additional shifts or arrivals are assumed. This is a scenario-based planning estimate, not a statistically fitted forecast. Historical charts show the full sample without season or month filters.
+
+Validate the projection with `node --experimental-strip-types --test tests/planning.test.mjs` (Node 22.13+).

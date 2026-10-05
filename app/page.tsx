@@ -34,6 +34,9 @@ import {
   YAxis,
 } from 'recharts';
 
+import { calculateScenario, forecastProduction } from '@/lib/planning';
+import type { ScenarioInput } from '@/lib/planning';
+
 import { Badge } from '@/components/ui/badge';
 import {
   Card,
@@ -42,10 +45,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from '@/components/ui/native-select';
 import {
   Table,
   TableBody,
@@ -131,35 +130,6 @@ type DashboardData = {
   action_counts: Array<{ action: string; days: number }>;
 };
 
-type DashboardToolInput = { season?: string; month?: string };
-type ScenarioInput = {
-  incomingTrailers: number;
-  unitsPerTrailer: number;
-  volumeGoal: number;
-  startingBacklogUnits: number;
-  headcount: number;
-  shiftHours: number;
-  stowRate: number;
-};
-
-type ScenarioResult = {
-  reserveUnits: number;
-  reserveShortfall: number;
-  goalShortfall: number;
-  backlogDays: number;
-  forecastedUnits: number;
-  availableUnits: number;
-  laborHours: number;
-  capacityUnits: number;
-  processedUnits: number;
-  endingBacklogUnits: number;
-  backlogHours: number;
-  tph: number;
-  requiredHeadcount: number;
-  staffingGap: number;
-  costPerUnit: number;
-  recommendedAction: string;
-};
 type ModelContext = {
   registerTool: (
     tool: {
@@ -173,13 +143,6 @@ type ModelContext = {
     options: { signal: AbortSignal },
   ) => void | Promise<void>;
 };
-
-const months = [
-  ['all', 'All months'], ['1', 'January'], ['2', 'February'],
-  ['3', 'March'], ['4', 'April'], ['5', 'May'], ['6', 'June'],
-  ['7', 'July'], ['8', 'August'], ['9', 'September'],
-  ['10', 'October'], ['11', 'November'], ['12', 'December'],
-];
 
 const colors = {
   cyan: '#79b5ff', amber: '#f4c06a', green: '#5cdec1',
@@ -195,56 +158,6 @@ const scenarioDefaults: ScenarioInput = {
   shiftHours: 10,
   stowRate: 260,
 };
-
-const PRODUCTIVE_UTILIZATION = 0.85;
-const HOURLY_LABOR_COST = 22;
-
-function calculateScenario(input: ScenarioInput): ScenarioResult {
-  const forecastedUnits = input.incomingTrailers * input.unitsPerTrailer;
-  const availableUnits = forecastedUnits + input.startingBacklogUnits;
-  const reserveUnits = input.volumeGoal;
-  const releasableUnits = Math.max(0, availableUnits - reserveUnits);
-  const laborHours = input.headcount * input.shiftHours;
-  const productiveHours = laborHours * PRODUCTIVE_UTILIZATION;
-  const capacityUnits = productiveHours * input.stowRate;
-  const processedUnits = Math.min(input.volumeGoal, releasableUnits, capacityUnits);
-  const endingBacklogUnits = Math.max(0, availableUnits - processedUnits);
-  const backlogHours = endingBacklogUnits / Math.max(input.headcount * input.stowRate, 1);
-  const tph = processedUnits / Math.max(input.shiftHours, 1);
-  const requiredHeadcount = Math.ceil(
-    Math.min(input.volumeGoal, releasableUnits) /
-      Math.max(input.shiftHours * PRODUCTIVE_UTILIZATION * input.stowRate, 1),
-  );
-  const staffingGap = requiredHeadcount - input.headcount;
-  const costPerUnit = (laborHours * HOURLY_LABOR_COST) / Math.max(processedUnits, 1);
-
-  let recommendedAction = 'Maintain plan';
-  if (availableUnits < reserveUnits) recommendedAction = 'Rebuild the reserve';
-  else if (releasableUnits < input.volumeGoal) recommendedAction = 'More inbound volume needed';
-  else if (staffingGap >= 12) recommendedAction = 'Add OT';
-  else if (staffingGap >= 5) recommendedAction = 'Labor share';
-  else if (staffingGap <= -10) recommendedAction = 'Consider VTO or labor share';
-  else if (staffingGap > 0) recommendedAction = 'Use flex-trained team';
-
-  return {
-    reserveUnits,
-    reserveShortfall: Math.max(0, reserveUnits - endingBacklogUnits),
-    goalShortfall: Math.max(0, input.volumeGoal - processedUnits),
-    backlogDays: reserveUnits > 0 ? endingBacklogUnits / reserveUnits : 0,
-    forecastedUnits,
-    availableUnits,
-    laborHours,
-    capacityUnits,
-    processedUnits,
-    endingBacklogUnits,
-    backlogHours,
-    tph,
-    requiredHeadcount,
-    staffingGap,
-    costPerUnit,
-    recommendedAction,
-  };
-}
 
 function average(rows: DailyMetric[], key: keyof DailyMetric) {
   if (!rows.length) return 0;
@@ -330,10 +243,10 @@ function NumberField({ label, field, value, setScenario, suffix, step = 1 }: {
 
 export default function Home() {
   const [data, setData] = useState<DashboardData | null>(null);
-  const [season, setSeason] = useState('all');
-  const [month, setMonth] = useState('all');
   const [scenario, setScenario] = useState<ScenarioInput>(scenarioDefaults);
   const scenarioResult = useMemo(() => calculateScenario(scenario), [scenario]);
+
+  const productionForecast = useMemo(() => forecastProduction(scenario), [scenario]);
 
   useEffect(() => {
     void fetch('./data/dashboard_data.json')
@@ -346,40 +259,6 @@ export default function Home() {
     const context = (document as Document & { modelContext?: ModelContext }).modelContext;
     if (!context?.registerTool) return;
     const lifecycle = new AbortController();
-    const validSeasons = new Set(['all', 'Peak', 'Non-Peak']);
-    const validMonths = new Set(months.map(([value]) => value));
-
-    void Promise.resolve(
-      context.registerTool(
-        {
-          name: 'configure_dashboard_view',
-          title: 'Configure dashboard view',
-          description: 'Set the visible season and month filters on the inbound-stow dashboard.',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              season: { type: 'string', enum: ['all', 'Peak', 'Non-Peak'] },
-              month: { type: 'string', enum: months.map(([value]) => value) },
-            },
-            additionalProperties: false,
-          },
-          annotations: { readOnlyHint: false, untrustedContentHint: false },
-          execute(input) {
-            const requested = input as DashboardToolInput;
-            const nextSeason = requested.season ?? 'all';
-            const nextMonth = requested.month ?? 'all';
-            if (!validSeasons.has(nextSeason) || !validMonths.has(nextMonth)) {
-              throw new Error('Invalid dashboard filter.');
-            }
-            setSeason(nextSeason);
-            setMonth(nextMonth);
-            return { season: nextSeason, month: nextMonth };
-          },
-        },
-        { signal: lifecycle.signal },
-      ),
-    ).catch(() => undefined);
-
     void Promise.resolve(
       context.registerTool(
         {
@@ -418,58 +297,39 @@ export default function Home() {
     return () => lifecycle.abort();
   }, []);
 
-  const filteredDaily = useMemo(() => {
-    if (!data) return [];
-    return data.daily.filter((row) =>
-      (season === 'all' || row.season === season) &&
-      (month === 'all' || row.month_number === Number(month)),
-    );
-  }, [data, month, season]);
-
-  const filteredMonthly = useMemo(() => {
-    if (!data) return [];
-    return data.monthly.filter((row) =>
-      (season === 'all' || row.season === season) &&
-      (month === 'all' || row.month_number === Number(month)),
-    );
-  }, [data, month, season]);
+  const daily = data?.daily ?? [];
+  const monthly = data?.monthly ?? [];
 
   if (!data) {
     return <main className="loading-screen"><Activity className="animate-pulse" /><p>Loading operating model…</p></main>;
   }
 
   const target = data.metadata.targets;
-  const avgRate = average(filteredDaily, 'stow_rate_uph');
-  const avgUpf = average(filteredDaily, 'units_per_face');
-  const avgHeadcount = average(filteredDaily, 'actual_headcount');
-  const avgRequiredHeadcount = average(filteredDaily, 'required_headcount');
-  const avgTph = average(filteredDaily, 'tph');
-  const avgTrailers = average(filteredDaily, 'forecasted_trailers');
-  const avgBacklog = average(filteredDaily, 'ending_backlog_units');
-  const avgBacklogHours = average(filteredDaily, 'backlog_hours');
-  const avgCost = average(filteredDaily, 'cost_per_unit');
-  const avgQuality = average(filteredDaily, 'quality_defects_per_1000');
-  const avgCount = average(filteredDaily, 'count_errors_per_1000');
+  const avgRate = average(daily, 'stow_rate_uph');
+  const avgUpf = average(daily, 'units_per_face');
+  const avgHeadcount = average(daily, 'actual_headcount');
+  const avgRequiredHeadcount = average(daily, 'required_headcount');
+  const avgTph = average(daily, 'tph');
+  const avgTrailers = average(daily, 'forecasted_trailers');
+  const avgBacklog = average(daily, 'ending_backlog_units');
+  const avgBacklogHours = average(daily, 'backlog_hours');
+  const avgCost = average(daily, 'cost_per_unit');
+  const avgQuality = average(daily, 'quality_defects_per_1000');
+  const avgCount = average(daily, 'count_errors_per_1000');
 
-  const decisionCounts = filteredDaily.reduce<Record<string, number>>((counts, row) => {
+  const decisionCounts = daily.reduce<Record<string, number>>((counts, row) => {
     counts[row.recommended_action] = (counts[row.recommended_action] || 0) + 1;
     return counts;
   }, {});
   const leadingDecision = Object.entries(decisionCounts).sort((a, b) => b[1] - a[1])[0] || ['Maintain plan', 0];
 
-  const trendData = month === 'all'
-    ? filteredMonthly.map((row) => ({
+  const trendData = monthly.map((row) => ({
         label: row.month, forecast: row.forecasted_units, processed: row.processed_units,
         backlog: row.ending_backlog_units, actualHeadcount: row.actual_headcount,
         requiredHeadcount: row.required_headcount,
-      }))
-    : filteredDaily.filter((_, index) => index % 3 === 0).map((row) => ({
-        label: row.work_date.slice(5), forecast: row.forecasted_units,
-        processed: row.processed_units, backlog: row.ending_backlog_units,
-        actualHeadcount: row.actual_headcount, requiredHeadcount: row.required_headcount,
       }));
 
-  const qualityData = filteredMonthly.map((row) => ({
+  const qualityData = monthly.map((row) => ({
     month: row.month, quality: row.quality_defects_per_1000,
     count: row.count_errors_per_1000, rate: row.stow_rate_uph,
   }));
@@ -498,20 +358,7 @@ export default function Home() {
           <h2>Plan today. Protect tomorrow.</h2>
           <p>Balance incoming trailers, staffing, and a full day of work in reserve.</p>
         </div>
-        <div className="filters">
-          <label htmlFor="season-filter">Season
-            <NativeSelect id="season-filter" aria-label="Filter by season" value={season} onChange={(event) => { setSeason(event.target.value); setMonth('all'); }}>
-              <NativeSelectOption value="all">All seasons</NativeSelectOption>
-              <NativeSelectOption value="Peak">Peak</NativeSelectOption>
-              <NativeSelectOption value="Non-Peak">Non-Peak</NativeSelectOption>
-            </NativeSelect>
-          </label>
-          <label htmlFor="month-filter">Month
-            <NativeSelect id="month-filter" aria-label="Filter by month" value={month} onChange={(event) => setMonth(event.target.value)}>
-              {months.filter(([value]) => value === 'all' || season === 'all' || data.monthly.some((row) => row.season === season && row.month_number === Number(value))).map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}
-            </NativeSelect>
-          </label>
-        </div>
+
       </section>
 
       <section className="scenario-planner" aria-labelledby="scenario-heading">
@@ -586,14 +433,31 @@ export default function Home() {
         </Card>
       </section>
 
-      <div className="control-row"><div><p className="section-kicker">Historical case study</p><h2>Performance over time</h2><p>Synthetic shift data, filtered by season and month. Separate from your live plan above.</p></div></div>
+      <section className="production-forecast" aria-label="Next 24 hours production forecast">
+        <ChartShell title="Next 24 hours · estimated production" description={`${Math.round(productionForecast[productionForecast.length - 1].production).toLocaleString()} units projected in 24 hours · updates with your plan`}>
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+            <LineChart data={productionForecast} margin={{ left: 4, right: 20, top: 12, bottom: 12 }}>
+              <CartesianGrid stroke={colors.grid} vertical={false} />
+              <XAxis dataKey="hour" type="number" domain={[0, 24]} ticks={[0, 4, 8, 12, 16, 20, 24]} tickFormatter={hour => `+${hour}h`} tickLine={false} axisLine={false} />
+              <YAxis tickFormatter={compact} tickLine={false} axisLine={false} width={52} />
+              <Tooltip labelFormatter={hour => `${Number(hour).toFixed(1)} hours from shift start`} formatter={value => `${Math.round(Number(value)).toLocaleString()} units`} contentStyle={{ background: '#101318', border: '1px solid #334158', color: '#f0f3f8' }} />
+              <Legend />
+              <Line type="linear" dataKey="production" name="Cumulative production" stroke={colors.cyan} strokeWidth={3} dot={false} />
+              <Line type="linear" dataKey="goal" name="Volume goal" stroke={colors.amber} strokeWidth={2} strokeDasharray="6 5" dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </ChartShell>
+        <p className="scenario-assumption-note">Planning estimate, not a statistical prediction. One shift starts at hour 0 with all planned inbound available. Assumes steady staffing and 85% productive time. Output stops at shift end, the volume goal, or available work after protecting tomorrow’s reserve. No additional shifts or arrivals are assumed.</p>
+      </section>
+
+      <div className="control-row"><div><p className="section-kicker">Historical case study</p><h2>Performance over time</h2><p>Full-year synthetic shift data. Separate from your live plan above.</p></div></div>
       <section className="metric-grid" aria-label="Key performance indicators">
         <MetricCard icon={Gauge} label="Stow rate" value={`${avgRate.toFixed(1)} UPH`} detail={`${avgRate >= target.stow_rate_uph ? 'At/above' : 'Below'} ${target.stow_rate_uph} target`} status={avgRate >= target.stow_rate_uph ? 'good' : 'watch'} />
         <MetricCard icon={Boxes} label="Units per face" value={avgUpf.toFixed(1)} detail={`${avgUpf >= target.units_per_face ? 'At/above' : 'Below'} ${target.units_per_face} target`} status={avgUpf >= target.units_per_face ? 'good' : 'watch'} />
-        <MetricCard icon={Users} label="Headcount" value={avgHeadcount.toFixed(1)} detail={`${compact(average(filteredDaily, 'labor_hours'))} labor hrs · ${Math.abs(avgRequiredHeadcount - avgHeadcount).toFixed(1)} ${avgRequiredHeadcount > avgHeadcount ? 'below' : 'above'} need`} status={Math.abs(avgRequiredHeadcount - avgHeadcount) <= 5 ? 'good' : 'watch'} />
+        <MetricCard icon={Users} label="Headcount" value={avgHeadcount.toFixed(1)} detail={`${compact(average(daily, 'labor_hours'))} labor hrs · ${Math.abs(avgRequiredHeadcount - avgHeadcount).toFixed(1)} ${avgRequiredHeadcount > avgHeadcount ? 'below' : 'above'} need`} status={Math.abs(avgRequiredHeadcount - avgHeadcount) <= 5 ? 'good' : 'watch'} />
         <MetricCard icon={Activity} label="Throughput" value={`${compact(avgTph)} TPH`} detail={`${compact(avgTph * data.metadata.assumptions.shift_hours)} units per 10-hour shift`} />
-        <MetricCard icon={Truck} label="Inbound forecast" value={`${avgTrailers.toFixed(1)} trailers`} detail={`${compact(average(filteredDaily, 'forecasted_units'))} units · ${compact(average(filteredDaily, 'units_per_trailer'))}/trailer`} />
-        <MetricCard icon={Clock} label="Backlog" value={`${compact(avgBacklog)} units`} detail={`${avgBacklogHours.toFixed(1)} hours · ${(avgBacklog / Math.max(average(filteredDaily, 'units_per_trailer'), 1)).toFixed(1)} trailers`} status={avgBacklogHours <= 1.5 ? 'good' : 'watch'} />
+        <MetricCard icon={Truck} label="Inbound forecast" value={`${avgTrailers.toFixed(1)} trailers`} detail={`${compact(average(daily, 'forecasted_units'))} units · ${compact(average(daily, 'units_per_trailer'))}/trailer`} />
+        <MetricCard icon={Clock} label="Backlog" value={`${compact(avgBacklog)} units`} detail={`${avgBacklogHours.toFixed(1)} hours · ${(avgBacklog / Math.max(average(daily, 'units_per_trailer'), 1)).toFixed(1)} trailers`} status={avgBacklogHours <= 1.5 ? 'good' : 'watch'} />
       </section>
 
       <section className="primary-grid">
@@ -618,10 +482,10 @@ export default function Home() {
               <div><p className="section-kicker">Recommended response</p><CardTitle>{leadingDecision[0]}</CardTitle></div>
               <span className="decision-icon"><AlertTriangle aria-hidden="true" /></span>
             </div>
-            <CardDescription>Most frequent rule-based decision for the selected period.</CardDescription>
+            <CardDescription>Most frequent rule-based decision across the full sample.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="decision-stat"><strong>{leadingDecision[1]}</strong><span>of {filteredDaily.length} shift-days</span></div>
+            <div className="decision-stat"><strong>{leadingDecision[1]}</strong><span>of {daily.length} shift-days</span></div>
             <div className="decision-rules">
               <div><span>Capacity gap</span><strong>{(avgRequiredHeadcount - avgHeadcount).toFixed(1)} people</strong></div>
               <div><span>Combined errors</span><strong>{(avgQuality + avgCount).toFixed(2)} / 1K</strong></div>
@@ -685,7 +549,7 @@ export default function Home() {
             <Table>
               <TableHeader><TableRow><TableHead>Response</TableHead><TableHead className="text-right">Days</TableHead><TableHead className="text-right">Share</TableHead></TableRow></TableHeader>
               <TableBody>{actionRows.map(([action, days]) => (
-                <TableRow key={action}><TableCell>{action}</TableCell><TableCell className="text-right">{days}</TableCell><TableCell className="text-right">{((days / Math.max(filteredDaily.length, 1)) * 100).toFixed(1)}%</TableCell></TableRow>
+                <TableRow key={action}><TableCell>{action}</TableCell><TableCell className="text-right">{days}</TableCell><TableCell className="text-right">{((days / Math.max(daily.length, 1)) * 100).toFixed(1)}%</TableCell></TableRow>
               ))}</TableBody>
             </Table>
           </CardContent>
@@ -706,8 +570,7 @@ export default function Home() {
           <CardContent><dl className="assumption-list">
             <div><dt>Sample shift length</dt><dd>10 hours</dd></div>
             <div><dt>Productive time</dt><dd>85%</dd></div>
-            <div><dt>Peak headcount</dt><dd>~170 associates</dd></div>
-            <div><dt>Non-peak headcount</dt><dd>~80 associates</dd></div>
+            <div><dt>Planner starting headcount</dt><dd>80 associates</dd></div>
             <div><dt>Quality threshold</dt><dd>≤ 5 combined / 1K</dd></div>
             <div><dt>Cost assumptions</dt><dd>$22 regular · $33 OT</dd></div>
           </dl></CardContent>

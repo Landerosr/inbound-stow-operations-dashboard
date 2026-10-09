@@ -2,7 +2,7 @@
   "metadata": {
     "title": "Inbound Stow Performance Dashboard",
     "period": "Jan 1\u2013Dec 31, 2026",
-    "disclaimer": "Synthetic portfolio data. No confidential employer data is used.",
+    "disclaimer": "Synthetic operations data. No confidential employer data is used.",
     "targets": {
       "stow_rate_uph": 260.0,
       "units_per_face": 13.0,

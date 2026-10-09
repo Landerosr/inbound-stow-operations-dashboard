@@ -2,7 +2,7 @@
 
 **Live dashboard:** https://landerosr.github.io/inbound-stow-operations-dashboard/
 
-An operations analytics portfolio project based on my experience leading inbound stow. The dashboard connects a daily volume goal with headcount, labor hours, stow rate, throughput, backlog, quality, and cost.
+An operations analytics project for inbound stow planning and performance analysis. The dashboard connects a daily volume goal with headcount, labor hours, stow rate, throughput, backlog, quality, and cost.
 
 The project uses synthetic data only. It does not contain confidential Amazon information or internal company benchmarks.
 

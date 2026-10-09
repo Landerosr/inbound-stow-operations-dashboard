@@ -1,4 +1,4 @@
-"""Create reproducible synthetic inbound-stow data for the portfolio dashboard.
+"""Create reproducible synthetic inbound-stow data for the operations dashboard.
 
 The operating logic is based on the project author's fulfillment-center
 experience. All volume, quality, and cost figures are illustrative and do not
@@ -253,7 +253,7 @@ def build_dashboard_payload(rows: list[dict[str, object]]) -> dict[str, object]:
             "title": "Inbound Stow Performance Dashboard",
             "period": "Jan 1–Dec 31, 2026",
             "disclaimer": (
-                "Synthetic portfolio data. No confidential employer data is used."
+                "Synthetic operations data. No confidential employer data is used."
             ),
             "targets": {
                 "stow_rate_uph": STOW_RATE_TARGET,

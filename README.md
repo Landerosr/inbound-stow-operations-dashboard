@@ -1,8 +1,44 @@
-# Inbound Stow Performance Dashboard
+# Quantitative Operations Analysis: Capacity, Backlog and Labor Planning
 
-**Live dashboard:** https://landerosr.github.io/inbound-stow-operations-dashboard/
+**[Open the dashboard](https://landerosr.github.io/inbound-stow-operations-dashboard/)** · [Planning model](lib/planning.ts) · [Synthetic-data generator](analytics/generate_data.py)
 
-An operations analytics project for inbound stow planning and performance analysis. The dashboard connects a daily volume goal with headcount, labor hours, stow rate, throughput, backlog, quality, and cost.
+An operations-research case study connecting staffing capacity, incoming work,
+backlog, productive utilization, quality and unit labor cost. The project uses
+a reproducible synthetic dataset and a separate interactive planning model.
+
+**Research question:** How do labor availability, processing rates and inbound
+volume constrain the achievable daily plan while preserving a work reserve?
+
+## Quantitative methods and theory
+
+- **Flow conservation:** ending backlog equals starting backlog plus inbound
+  units minus processed units.
+- **Capacity analysis:** shift capacity equals headcount × shift hours ×
+  productive utilization × units processed per productive labor hour.
+- **Constrained planning:** the live planner caps processing at the smallest of
+  the daily goal, staffing capacity and work available above the protected
+  reserve. Required headcount is rounded up for the feasible work target.
+- **Scenario analysis:** editable assumptions expose the effect of staffing,
+  productivity, shift length and trailer volume on throughput and cost.
+- **Reproducible stochastic data generation:** seeded synthetic variation in
+  staffing, demand, quality and processing rates creates a 365-day case study.
+- **Descriptive statistics and SQL aggregation:** compare monthly and seasonal
+  operating metrics and summarize rule-based staffing actions.
+
+The live planner is a deterministic capacity model with decision heuristics.
+It does not solve a mathematical optimization problem, fit a statistical demand
+forecast, or estimate waiting times from a queueing model. The synthetic case
+study does not establish causal effects or realized operational savings.
+
+## Model evidence and checks
+
+- [Planning formulas](lib/planning.ts) and [boundary-condition tests](tests/planning.test.mjs).
+- [Synthetic generation](analytics/generate_data.py), [SQL queries](analytics/queries.sql)
+  and [data-integrity checks](analytics/test_analysis.py).
+- The synthetic historical generator and live planner are distinct models:
+  the live planner protects a one-day reserve, while the historical simulation
+  processes available work subject to capacity. Historical charts do not
+  recompute when the live planning inputs change.
 
 The project uses synthetic data only. It does not contain confidential Amazon information or internal company benchmarks.
 

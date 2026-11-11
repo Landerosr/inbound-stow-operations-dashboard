@@ -1,6 +1,8 @@
 # Quantitative Operations Analysis: Capacity, Backlog and Labor Planning
 
-**[Open the dashboard](https://landerosr.github.io/inbound-stow-operations-dashboard/)** · [Planning model](lib/planning.ts) · [Synthetic-data generator](analytics/generate_data.py)
+This repository is the primary project portfolio. The research code, results and documentation are available here without needing a separate website; interface source is preserved for optional local use.
+
+[Planning model](lib/planning.ts) · [Synthetic-data generator](analytics/generate_data.py)
 
 An operations-research case study connecting staffing capacity, incoming work,
 backlog, productive utilization, quality and unit labor cost. The project uses

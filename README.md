@@ -1,107 +1,44 @@
-# Quantitative Operations Analysis: Capacity, Backlog and Labor Planning
+# Inbound capacity and labor planning
 
-This repository is the primary project portfolio. The research code, results and documentation are available here without needing a separate website; interface source is preserved for optional local use.
+**Research question:** How can a shift planner tell whether staffing or incoming work is the binding constraint while protecting one day of work as a reserve?
 
-[Planning model](lib/planning.ts) · [Synthetic-data generator](analytics/generate_data.py)
+This case study draws on fulfillment-center operations experience. All volumes, rates, quality measures and labor costs are synthetic or illustrative. No confidential Amazon data or internal benchmarks are used.
 
-An operations-research case study connecting staffing capacity, incoming work,
-backlog, productive utilization, quality and unit labor cost. The project uses
-a reproducible synthetic dataset and a separate interactive planning model.
+## Worked scenario
 
-**Research question:** How do labor availability, processing rates and inbound
-volume constrain the achievable daily plan while preserving a work reserve?
+Consider a 183,000-unit goal, 183,000 units of starting backlog and 15 incoming trailers of 12,200 units each. A ten-hour shift at 85% productive utilization and 260 units per productive labor hour gives:
 
-## Quantitative methods and theory
+| Scheduled associates | Labor capacity | Planned units | Ending backlog |
+| ---: | ---: | ---: | ---: |
+| 80 | 176,800 | 176,800 | 189,200 |
+| 100 | 221,000 | 183,000 | 183,000 |
 
-- **Flow conservation:** ending backlog equals starting backlog plus inbound
-  units minus processed units.
-- **Capacity analysis:** shift capacity equals headcount × shift hours ×
-  productive utilization × units processed per productive labor hour.
-- **Constrained planning:** the live planner caps processing at the smallest of
-  the daily goal, staffing capacity and work available above the protected
-  reserve. Required headcount is rounded up for the feasible work target.
-- **Scenario analysis:** editable assumptions expose the effect of staffing,
-  productivity, shift length and trailer volume on throughput and cost.
-- **Reproducible stochastic data generation:** seeded synthetic variation in
-  staffing, demand, quality and processing rates creates a 365-day case study.
-- **Descriptive statistics and SQL aggregation:** compare monthly and seasonal
-  operating metrics and summarize rule-based staffing actions.
+At 80 associates the shift is 6,200 units short because labor capacity is binding. At 100, throughput is capped by the goal and by the amount of work above the reserve; adding capacity past that point does not release more work. If no trailers arrive and the initial backlog just equals the reserve, adding staff does not increase planned throughput. These are model outcomes, not observed savings or a staffing recommendation. The [boundary tests](tests/planning.test.mjs) cover these cases and the production curve flattening at shift end.
 
-The live planner is a deterministic capacity model with decision heuristics.
-It does not solve a mathematical optimization problem, fit a statistical demand
-forecast, or estimate waiting times from a queueing model. The synthetic case
-study does not establish causal effects or realized operational savings.
+## Model and data
 
-## Model evidence and checks
+The project deliberately separates two models.
 
-- [Planning formulas](lib/planning.ts) and [boundary-condition tests](tests/planning.test.mjs).
-- [Synthetic generation](analytics/generate_data.py), [SQL queries](analytics/queries.sql)
-  and [data-integrity checks](analytics/test_analysis.py).
-- The synthetic historical generator and live planner are distinct models:
-  the live planner protects a one-day reserve, while the historical simulation
-  processes available work subject to capacity. Historical charts do not
-  recompute when the live planning inputs change.
+1. **Daily scenario planner.** Incoming units equal trailer count times units per trailer. Available work is starting backlog plus incoming units. Staff capacity is headcount × shift hours × productive utilization × processing rate. Planned throughput is the minimum of the goal, capacity and available units above the reserve, floored at zero for releasable work. Ending backlog is available work less throughput. Required headcount is rounded up for the *achievable* work target, not for work missing from the inbound plan. [Planning model](lib/planning.ts)
+2. **Synthetic historical case study.** A seeded Python generator produces 365 daily records with seasonal staffing, volume, quality and processing-rate variation. Backlog rolls from one day into the next. The generator processes available work subject to capacity and does not use the planner's reserve. SQLite queries summarize monthly throughput, backlog, units per face, defects, count errors, cost per unit and the frequency of rule-based staffing actions. Changing planner inputs does not recalculate this historical sample. [Generator](analytics/generate_data.py) · [SQL summaries](analytics/queries.sql) · [Data-integrity checks](analytics/test_analysis.py)
 
-The project uses synthetic data only. It does not contain confidential Amazon information or internal company benchmarks.
+The planner's action rules cover overtime, labor sharing, voluntary time off and flex-trained staffing; the synthetic case adds quality audits and units-per-face coaching. Example assumptions are ten-hour shifts, 85% utilization, a 260-unit stow rate, a target of 13 units per face, approximately 170 peak and 80 off-peak associates, and a combined error threshold of five per 1,000 units. The historical sample uses illustrative rates of $22 for regular labor and $33 for overtime; the planner uses $22 per scheduled hour without an overtime premium.
 
-## Business question
+## Limitations
 
-How should an inbound team adjust labor when forecasted volume, backlog, stow performance, and quality change during peak and non-peak periods?
+The planner is a deterministic capacity calculation with action thresholds. It does not solve an optimization problem, fit a demand forecast, estimate queueing delays or establish causal effects. Its 24-hour chart assumes one shift, all incoming work available at its start, and a constant processing rate and utilization. It stops accumulating production at shift end, the goal, or the releasable-work limit. A delayed trailer or changing productivity would require a model with time-varying inputs. Likewise, relationships between quality and throughput in the synthetic sample reflect assumptions in the generator rather than evidence from observed shifts.
 
-## What the dashboard tracks
+## Reproduce the analysis
 
-- Daily volume goal
-- Starting and ending backlog in units and hours of work
-- Actual versus required headcount
-- Labor hours, stow rate (UPH), and throughput per hour (TPH)
-- Units per face (UPF), quality defects, and count errors
-- Estimated labor cost per processed unit
-
-## Decisions modeled
-
-The simplified planner recommends adding overtime, offering voluntary time off, labor sharing, using flex-trained associates, or maintaining the plan. The historical case-study data also tracks UPF coaching and quality-audit decisions.
-
-## Live planning tool
-
-The daily planner uses headcount, volume goal, estimated stow rate, shift length, starting backlog, and incoming trailers. Units per trailer can be edited under the expandable assumptions section.
-
-One day of reserve equals the daily volume goal. Available work is starting backlog plus incoming trailers multiplied by estimated units per trailer. Planned processing is the lowest of the daily goal, staffing capacity, and work available above the reserve. If there is not enough incoming work, the planner identifies the shortfall instead of recommending extra labor to process the reserve. Required headcount refers to this achievable processing plan.
-
-The planner assumes incoming volume becomes available during the shift; it does not model trailer arrival times. Cost uses $22 per scheduled labor hour and excludes overtime premiums. Historical synthetic charts remain a separate case study and do not change with planner inputs.
-
-## Tools
-
-- Python generates one year of reproducible synthetic shift data.
-- SQL and SQLite store and summarize the operating metrics.
-- React and Recharts provide the interactive dashboard.
-
-## Run the analysis
-
-```bash
+```sh
 python3 analytics/generate_data.py
 python3 -m unittest analytics/test_analysis.py
+node --experimental-strip-types --test tests/planning.test.mjs
 ```
 
-## Run the dashboard
+The Node test command requires Node 22.13+. Python generates the data and SQLite stores the records. To run the optional local React/Recharts interface:
 
-```bash
+```sh
 pnpm install
 pnpm dev
 ```
-
-## Sample assumptions
-
-- 10-hour shifts
-- 260 UPH stow-rate target
-- 13 UPF target
-- Approximately 170 associates during four peak months
-- Approximately 80 associates during non-peak months
-- 85% productive utilization
-- Illustrative labor rates of $22 regular and $33 overtime
-- Illustrative quality threshold of no more than five combined defects and count errors per 1,000 units
-
-### Next 24 hours production projection
-
-The live planner includes a cumulative production line and volume-goal comparison from hour 0 through hour 24. It recalculates with the planning inputs. One shift begins at hour 0; all planned inbound is assumed available at the start, staffing and rate are constant, and productive utilization is 85%. Production stops at shift end, the volume goal, or available volume after retaining the one-day reserve. No additional shifts or arrivals are assumed. This is a scenario-based planning estimate, not a statistically fitted forecast. Historical charts show the full sample without season or month filters.
-
-Validate the projection with `node --experimental-strip-types --test tests/planning.test.mjs` (Node 22.13+).
